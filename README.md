@@ -2,7 +2,7 @@
 
 #### Dawid Grabek
 
-_Początkowo zrobiłem plik word i postarałem się przekleić zadania do pliku README, jednak nie ma tu wszystkich screenów, głównie znajdują się tutaj rozwiązanie na zadanie 4, z potwierdzeniem wykonania zadania i uzasadnieniem_
+_Początkowo zrobiłem plik word i postarałem się przekleić zadania do pliku README, jednak nie ma tu wszystkich screenów, głównie znajdują się tutaj rozwiązanie na zadanie 4, z potwierdzeniem wykonania zadania i uzasadnieniem oraz część nieobowiązkowa, której w pliku word nie ma_
 
 **W razie jakichkolwiek wątpliwości polecam spojrzeć na plik rozwiazanie.pdf**
 
@@ -14,7 +14,7 @@ uruchomić ten obiekt (tą przestrzeń nazw). Następnie należy utworzyć zesta
 manifestów (plików yaml) opisujących obiekty środowiska Kubernetes zgodnie z poniższymi
 założeniami:_
 
-```
+```bash
 # Tworzenie przestrzeni nazw zad1 do sprawozdania
 
 /d/studia/Semestr_9/chmury
@@ -91,7 +91,7 @@ Finalna liczba replik: **5** (dla zachowania limitów RAM).
 
 _Udokumentowane w pliku pdf, ale każde utworzenie obiektu bazowało na składni:_
 
-```
+```bash
 $ kubectl apply -f <name>.yaml
 ```
 
@@ -124,3 +124,60 @@ przekraczając ustawionego limitu maxReplicas (5).
 
 - HPA działa poprawnie, a liczba replik dynamicznie rośnie w odpowiedzi na obciążenie CPU.
 - Wszystko jest skonfigurowane zgodnie z oczekiwaniami, a mechanizm autoskalowania działa efektywnie.
+
+# Część nieobowiązkowa
+
+## Zadanie nr. 1
+
+_Czy możliwe jest dokonanie aktualizacji aplikacji (np. wersji obrazu kontenera) gdy aplikacja jest pod kontrolą autoskalera HPA ? Proszę do odpowiedzi (TAK lub NIE) dodać link do fragmentu dokumentacji, w którym jest rozstrzygnięta ta kwestia._
+
+**TAK**
+
+Aktualizacja Deploymentu jest możliwa nawet wtedy, gdy jest on pod kontrolą HPA. Kubernetes zarządza replikami niezależnie podczas procesu aktualizacji. HPA nie przeszkadza w przeprowadzaniu strategii aktualizacji, takich jak `RollingUpdate`.
+
+> A Deployment’s rollout is triggered if and only if the Deployment’s Pod template (that is, .spec.template) is changed, for example if you update the labels or container images of the template. Deployments support updating their Pods in a rolling update fashion by default.
+
+Źródło: [Kubernetes Documentation - Rolling Updates](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#rolling-update-deployment)
+
+## Zadanie nr. 2
+
+_Jeśli odpowiedź na poprzednie pytanie jest pozytywna to proszę podać przykładowe parametry strategii rollingUpdate, które zagwarantują, że:_
+
+- _a) Podczas aktualizacji zawsze będa aktywne 2 pod-y realizujące działanie przykładowej aplikacji oraz_
+- _b) Nie zostaną przekroczone parametry wcześniej zdefiniowanej quoty dla przestrzeni zad1._
+- _c) Jeśli należy skorelować (zmienić) ustawienia autoskalera HPA z części obowiązkowej w związku z zaplanowaną strategią aktualizacji to należy również przedstawić te zmiany._
+
+### Przykładowe parametry strategii `rollingUpdate`:
+
+```yaml
+spec:
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+```
+
+### Wyjaśnienie parametrów:
+
+- maxUnavailable: 0
+  - Gwarantuje, że podczas aktualizacji zawsze będą dostępne wszystkie istniejące pody. Dzięki temu aplikacja działa bez przestojów.
+- maxSurge: 1
+  - Pozwala na uruchomienie maksymalnie jednego dodatkowego poda w czasie aktualizacji. Dzięki temu liczba aktywnych podów nie przekracza wcześniej zdefiniowanych zasobów w ResourceQuota.
+
+### Związek z ResourceQuota:
+
+Przestrzeń zad1 ma ograniczenie ResourceQuota, które pozwala na maksymalnie 10 podów, 2 CPU (2000m) oraz 1.5Gi pamięci.
+
+- Obciążenie CPU i RAM jednego poda:
+  - CPU: 250m
+  - RAM: 250Mi
+
+**Obliczenia:**
+
+- Dodatkowy pod podczas aktualizacji (maxSurge: 1) wymaga 250m CPU i 250Mi RAM.
+- Suma aktywnych podów (2+1) wynosi 3 podczas aktualizacji, co daje:
+  - CPU: 3 \* 250m = 750m (mieści się w limicie 2000m).
+  - RAM: 3 \* 250Mi = 750Mi (mieści się w limicie 1.5Gi).
+
+**Parametry są więc zgodne z ograniczeniami ResourceQuota.**
